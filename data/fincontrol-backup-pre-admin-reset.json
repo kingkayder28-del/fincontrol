@@ -1,0 +1,540 @@
+{
+  "organizations": [
+    {
+      "id": "org-default-01",
+      "name": "Hope Horizon Foundation",
+      "type": "NGO",
+      "registrationNo": "NGO-MW-2024-88",
+      "taxId": "TP-900281-22",
+      "physicalAddress": "Plot 14/122 Independence Drive, Capital City",
+      "postalAddress": "P.O. Box 30192, Capital City",
+      "phone": "+265 99 123 4567",
+      "email": "finance@hopehorizon.org",
+      "website": "https://hopehorizon.org",
+      "country": "Malawi",
+      "currency": {
+        "code": "MWK",
+        "symbol": "MWK",
+        "name": "Malawian Kwacha"
+      },
+      "fiscalYearStart": "01-01",
+      "logoUrl": "https://images.unsplash.com/photo-1532629345422-7515f3d16bb0?w=120&auto=format&fit=crop&q=80",
+      "authorizedSignatory": "Dr. Evelyn Phiri (Executive Director)",
+      "contactPerson": "James Banda (Head of Finance)",
+      "status": "active",
+      "approvalThreshold": 1000000,
+      "themeColor": "#3b82f6",
+      "accentColor": "#1e40af",
+      "createdAt": "2026-01-01T08:00:00Z"
+    }
+  ],
+  "activeOrgId": "org-default-01",
+  "currentUser": {},
+  "users": [],
+  "accounts": [
+    {
+      "id": "acct-cash-01",
+      "orgId": "org-default-01",
+      "name": "Main Petty Cash Office",
+      "type": "cash",
+      "accountNoIdentifier": "1010-CASH-MAIN",
+      "currency": "MWK",
+      "openingBalance": 250000,
+      "currentBalance": 485000,
+      "status": "active"
+    },
+    {
+      "id": "acct-bank-01",
+      "orgId": "org-default-01",
+      "name": "Standard Bank Operating Acct",
+      "type": "bank",
+      "accountNoIdentifier": "9182374619283",
+      "bankOrProviderName": "Standard Bank",
+      "currency": "MWK",
+      "openingBalance": 45000000,
+      "currentBalance": 68450000,
+      "status": "active"
+    },
+    {
+      "id": "acct-bank-02",
+      "orgId": "org-default-01",
+      "name": "National Bank Donor Grant Acct",
+      "type": "bank",
+      "accountNoIdentifier": "10029384756",
+      "bankOrProviderName": "National Bank of Malawi",
+      "currency": "MWK",
+      "openingBalance": 85000000,
+      "currentBalance": 112000000,
+      "status": "active"
+    },
+    {
+      "id": "acct-mobile-01",
+      "orgId": "org-default-01",
+      "name": "Airtel Money Merchant Wallet",
+      "type": "mobile_money",
+      "accountNoIdentifier": "+265 99 911 2233",
+      "bankOrProviderName": "Airtel Money",
+      "currency": "MWK",
+      "openingBalance": 1200000,
+      "currentBalance": 3850000,
+      "status": "active"
+    },
+    {
+      "id": "acct-mobile-02",
+      "orgId": "org-default-01",
+      "name": "TNM Mpamba Official Wallet",
+      "type": "mobile_money",
+      "accountNoIdentifier": "+265 88 844 5566",
+      "bankOrProviderName": "TNM Mpamba",
+      "currency": "MWK",
+      "openingBalance": 800000,
+      "currentBalance": 1920000,
+      "status": "active"
+    }
+  ],
+  "categories": [
+    {
+      "id": "cat-inc-01",
+      "orgId": "org-default-01",
+      "name": "Grant Funding",
+      "type": "income",
+      "code": "4010",
+      "description": "Institutional and donor grants",
+      "isSystem": true
+    },
+    {
+      "id": "cat-inc-02",
+      "orgId": "org-default-01",
+      "name": "Individual Donations",
+      "type": "income",
+      "code": "4020",
+      "description": "Public & individual contributions",
+      "isSystem": true
+    },
+    {
+      "id": "cat-inc-03",
+      "orgId": "org-default-01",
+      "name": "Membership Fees",
+      "type": "income",
+      "code": "4030",
+      "description": "Annual membership dues",
+      "isSystem": true
+    },
+    {
+      "id": "cat-inc-04",
+      "orgId": "org-default-01",
+      "name": "Fundraising Events",
+      "type": "income",
+      "code": "4040",
+      "description": "Ticket sales & gala events",
+      "isSystem": true
+    },
+    {
+      "id": "cat-inc-05",
+      "orgId": "org-default-01",
+      "name": "Consultancy & Service Charges",
+      "type": "income",
+      "code": "4050",
+      "description": "Advisory services provided",
+      "isSystem": true
+    },
+    {
+      "id": "cat-exp-01",
+      "orgId": "org-default-01",
+      "name": "Program & Field Activities",
+      "type": "expense",
+      "code": "5010",
+      "description": "Direct project execution costs",
+      "isSystem": true
+    },
+    {
+      "id": "cat-exp-02",
+      "orgId": "org-default-01",
+      "name": "Salaries & Allowances",
+      "type": "expense",
+      "code": "5020",
+      "description": "Staff payroll and field per diems",
+      "isSystem": true
+    },
+    {
+      "id": "cat-exp-03",
+      "orgId": "org-default-01",
+      "name": "Workshops & Capacity Building",
+      "type": "expense",
+      "code": "5030",
+      "description": "Training sessions and seminars",
+      "isSystem": true
+    },
+    {
+      "id": "cat-exp-04",
+      "orgId": "org-default-01",
+      "name": "Travel & Logistics",
+      "type": "expense",
+      "code": "5040",
+      "description": "Fuel, vehicle hire, flights",
+      "isSystem": true
+    },
+    {
+      "id": "cat-exp-05",
+      "orgId": "org-default-01",
+      "name": "Office Rent & Utilities",
+      "type": "expense",
+      "code": "5050",
+      "description": "Rent, electricity, water, internet",
+      "isSystem": true
+    },
+    {
+      "id": "cat-exp-06",
+      "orgId": "org-default-01",
+      "name": "Bank & Transaction Fees",
+      "type": "expense",
+      "code": "5060",
+      "description": "Bank charges, transfer fees, mobile commission",
+      "isSystem": true
+    },
+    {
+      "id": "cat-exp-07",
+      "orgId": "org-default-01",
+      "name": "Monitoring & Evaluation",
+      "type": "expense",
+      "code": "5070",
+      "description": "Project audits, impact studies",
+      "isSystem": true
+    }
+  ],
+  "inventory": [
+    {
+      "id": "inv-prod-001",
+      "orgId": "org-default-01",
+      "productName": "Rice 25kg",
+      "sku": "RICE-25KG",
+      "category": "Staple Foods",
+      "openingQuantity": 120,
+      "currentQuantity": 120,
+      "unitCost": 2700,
+      "unitPrice": 3900,
+      "reorderLevel": 25,
+      "lastUpdated": "2026-09-14T11:56:42.506Z",
+      "description": "Retail stock for fast-moving household consumption"
+    },
+    {
+      "id": "inv-prod-002",
+      "orgId": "org-default-01",
+      "productName": "Cooking Oil 5L",
+      "sku": "OIL-5L",
+      "category": "Groceries",
+      "openingQuantity": 80,
+      "currentQuantity": 80,
+      "unitCost": 4200,
+      "unitPrice": 5900,
+      "reorderLevel": 20,
+      "lastUpdated": "2026-09-14T11:56:42.506Z",
+      "description": "Processed edible oil"
+    }
+  ],
+  "inventoryImportApprovals": [],
+  "inventoryMovements": [],
+  "projects": [
+    {
+      "id": "proj-01",
+      "orgId": "org-default-01",
+      "name": "Rural Water & Sanitation Project (RWSP)",
+      "code": "PROJ-2026-RWSP",
+      "type": "project",
+      "donorName": "Global Water Trust Foundation",
+      "totalBudget": 60000000,
+      "startDate": "2026-01-01",
+      "endDate": "2026-12-31",
+      "status": "active"
+    },
+    {
+      "id": "proj-02",
+      "orgId": "org-default-01",
+      "name": "Youth Digital Skills & Education Grant",
+      "code": "GRANT-YOUTH-TECH",
+      "type": "grant",
+      "donorName": "USAID / EU Innovation Fund",
+      "totalBudget": 95000000,
+      "startDate": "2026-02-01",
+      "endDate": "2027-01-31",
+      "status": "active"
+    },
+    {
+      "id": "proj-03",
+      "orgId": "org-default-01",
+      "name": "Emergency Relief Response Fund",
+      "code": "FUND-RELIEF-26",
+      "type": "fund",
+      "donorName": "Community Emergency Campaign",
+      "totalBudget": 30000000,
+      "startDate": "2026-01-15",
+      "endDate": "2026-08-30",
+      "status": "active"
+    }
+  ],
+  "departments": [
+    {
+      "id": "dept-01",
+      "orgId": "org-default-01",
+      "name": "Programs & Operations",
+      "code": "DP-PROG",
+      "costCentre": "CC-101"
+    },
+    {
+      "id": "dept-02",
+      "orgId": "org-default-01",
+      "name": "Finance & Administration",
+      "code": "DP-FIN",
+      "costCentre": "CC-102"
+    },
+    {
+      "id": "dept-03",
+      "orgId": "org-default-01",
+      "name": "Monitoring, Evaluation & Learning",
+      "code": "DP-MEL",
+      "costCentre": "CC-103"
+    }
+  ],
+  "receipts": [
+    {
+      "id": "rcpt-101",
+      "orgId": "org-default-01",
+      "receiptNumber": "RCPT-2026-000001",
+      "date": "2026-09-14",
+      "time": "09:15",
+      "receivedFrom": "Global Water Trust Foundation",
+      "description": "Q3 Disbursement for Rural Water & Sanitation Project",
+      "categoryId": "cat-inc-01",
+      "accountId": "acct-bank-02",
+      "paymentMethod": "bank",
+      "amount": 25000000,
+      "referenceNo": "BANK-TRF-992019",
+      "customerDonorMember": "Global Water Trust",
+      "projectFundId": "proj-01",
+      "departmentId": "dept-01",
+      "notes": "Direct wire transfer received cleanly.",
+      "recordedByUserId": "usr-entry-03",
+      "recordedByName": "Chifundo Mwale",
+      "createdAt": "2026-09-14T09:15:00Z"
+    },
+    {
+      "id": "rcpt-102",
+      "orgId": "org-default-01",
+      "receiptNumber": "RCPT-2026-000002",
+      "date": "2026-09-14",
+      "time": "11:40",
+      "receivedFrom": "Community Fundraising Committee",
+      "description": "Cash collections from Annual Gala Dinner tickets",
+      "categoryId": "cat-inc-04",
+      "accountId": "acct-cash-01",
+      "paymentMethod": "cash",
+      "amount": 350000,
+      "referenceNo": "GALA-TICKETS-CASH",
+      "customerDonorMember": "Public Attendees",
+      "projectFundId": "proj-03",
+      "departmentId": "dept-02",
+      "notes": "Counted and verified at cash desk.",
+      "recordedByUserId": "usr-entry-03",
+      "recordedByName": "Chifundo Mwale",
+      "createdAt": "2026-09-14T11:40:00Z"
+    },
+    {
+      "id": "rcpt-103",
+      "orgId": "org-default-01",
+      "receiptNumber": "RCPT-2026-000003",
+      "date": "2026-08-12",
+      "time": "14:20",
+      "receivedFrom": "Airtel Money Merchant Donations",
+      "description": "Mobile Money public donation campaign receipts",
+      "categoryId": "cat-inc-02",
+      "accountId": "acct-mobile-01",
+      "paymentMethod": "mobile_money",
+      "amount": 1450000,
+      "referenceNo": "AIRTEL-BULK-0812",
+      "customerDonorMember": "Individual Donors",
+      "projectFundId": "proj-03",
+      "recordedByUserId": "usr-fm-02",
+      "recordedByName": "Sarah Chisale",
+      "createdAt": "2026-08-12T14:20:00Z"
+    }
+  ],
+  "payments": [
+    {
+      "id": "pay-201",
+      "orgId": "org-default-01",
+      "paymentNumber": "PAY-2026-000001",
+      "date": "2026-09-14",
+      "time": "10:00",
+      "payee": "Apex Borehole Drilling & Engineering Ltd",
+      "description": "Down payment for 3 borehole installations in District B",
+      "categoryId": "cat-exp-01",
+      "accountId": "acct-bank-01",
+      "paymentMethod": "bank",
+      "amount": 8500000,
+      "referenceNo": "INV-APEX-2026-44",
+      "invoiceNo": "APEX-44",
+      "poNo": "PO-2026-089",
+      "supplierName": "Apex Drilling Ltd",
+      "projectFundId": "proj-01",
+      "departmentId": "dept-01",
+      "notes": "Approved by Executive Director.",
+      "recordedByUserId": "usr-fm-02",
+      "recordedByName": "Sarah Chisale",
+      "status": "approved",
+      "approvedByUserId": "usr-approver-04",
+      "approvedByName": "Dr. Evelyn Phiri",
+      "approvedAt": "2026-09-14T10:30:00Z",
+      "createdAt": "2026-09-14T10:00:00Z"
+    },
+    {
+      "id": "pay-202",
+      "orgId": "org-default-01",
+      "paymentNumber": "PAY-2026-000002",
+      "date": "2026-09-14",
+      "time": "12:30",
+      "payee": "City Station Fuel Services",
+      "description": "Field supervision vehicle fuel vouchers (Petty cash)",
+      "categoryId": "cat-exp-04",
+      "accountId": "acct-cash-01",
+      "paymentMethod": "cash",
+      "amount": 115000,
+      "referenceNo": "PETTY-VOUCHER-0813",
+      "supplierName": "City Station Fuel",
+      "projectFundId": "proj-01",
+      "departmentId": "dept-01",
+      "recordedByUserId": "usr-entry-03",
+      "recordedByName": "Chifundo Mwale",
+      "status": "paid",
+      "createdAt": "2026-09-14T12:30:00Z"
+    },
+    {
+      "id": "pay-203",
+      "orgId": "org-default-01",
+      "paymentNumber": "PAY-2026-000003",
+      "date": "2026-08-11",
+      "time": "15:10",
+      "payee": "Digital Hub Printing Press",
+      "description": "Printing youth training workbooks & banners",
+      "categoryId": "cat-exp-03",
+      "accountId": "acct-bank-01",
+      "paymentMethod": "bank",
+      "amount": 1850000,
+      "referenceNo": "INV-DIGI-88",
+      "invoiceNo": "DIGI-88",
+      "supplierName": "Digital Hub Press",
+      "projectFundId": "proj-02",
+      "departmentId": "dept-03",
+      "recordedByUserId": "usr-entry-03",
+      "recordedByName": "Chifundo Mwale",
+      "status": "pending_approval",
+      "createdAt": "2026-08-11T15:10:00Z"
+    }
+  ],
+  "transfers": [
+    {
+      "id": "trf-301",
+      "orgId": "org-default-01",
+      "transferNumber": "TRF-2026-000001",
+      "date": "2026-09-14",
+      "time": "08:30",
+      "fromAccountId": "acct-bank-01",
+      "toAccountId": "acct-cash-01",
+      "amount": 350000,
+      "feeAmount": 1500,
+      "referenceNo": "CHK-WITHDRAWAL-091",
+      "description": "Petty cash replenishment withdrawal from Standard Bank",
+      "recordedByUserId": "usr-entry-03",
+      "recordedByName": "Chifundo Mwale",
+      "createdAt": "2026-09-14T08:30:00Z"
+    }
+  ],
+  "cashCounts": [
+    {
+      "id": "cashcount-401",
+      "orgId": "org-default-01",
+      "accountId": "acct-cash-01",
+      "date": "2026-09-14",
+      "openingCash": 250000,
+      "cashReceipts": 350000,
+      "cashPayments": 115000,
+      "expectedClosingCash": 485000,
+      "actualPhysicalCash": 460000,
+      "cashDifference": -25000,
+      "status": "SHORTAGE",
+      "explanation": "MWK 25,000 cash shortage noted during evening count. Under investigation by finance officer.",
+      "personResponsible": "Chifundo Mwale",
+      "createdAt": "2026-09-14T17:00:00Z"
+    }
+  ],
+  "reconciliations": [],
+  "shareLinks": [],
+  "auditLogs": [
+    {
+      "id": "audit-001",
+      "orgId": "org-default-01",
+      "userId": "usr-admin-01",
+      "userName": "James Banda",
+      "userRole": "admin",
+      "action": "ORGANIZATION_INITIALIZED",
+      "module": "System",
+      "details": "Created organization Hope Horizon Foundation with base currency MWK.",
+      "timestamp": "2026-01-01T08:00:00Z"
+    },
+    {
+      "id": "audit-002",
+      "orgId": "org-default-01",
+      "userId": "usr-entry-03",
+      "userName": "Chifundo Mwale",
+      "userRole": "data_entry",
+      "action": "RECEIPT_CREATED",
+      "module": "Receipts",
+      "details": "Recorded RCPT-2026-000001 for MWK 25,000,000 from Global Water Trust.",
+      "timestamp": "2026-09-14T09:15:00Z"
+    },
+    {
+      "id": "audit-003",
+      "orgId": "org-default-01",
+      "userId": "usr-approver-04",
+      "userName": "Dr. Evelyn Phiri",
+      "userRole": "approver",
+      "action": "PAYMENT_APPROVED",
+      "module": "Approvals",
+      "details": "Approved payment PAY-2026-000001 for MWK 8,500,000 to Apex Drilling.",
+      "timestamp": "2026-09-14T10:30:00Z"
+    },
+    {
+      "id": "audit-004",
+      "orgId": "org-default-01",
+      "userId": "usr-entry-03",
+      "userName": "Chifundo Mwale",
+      "userRole": "data_entry",
+      "action": "CASH_COUNT_SUBMITTED",
+      "module": "Cash Control",
+      "details": "Submitted cash count for Main Petty Cash Office. SHORTAGE of MWK 25,000 recorded.",
+      "timestamp": "2026-09-14T17:00:00Z"
+    }
+  ],
+  "notifications": [
+    {
+      "id": "notif-01",
+      "orgId": "org-default-01",
+      "title": "Cash Shortage Alert",
+      "message": "Main Petty Cash Office reported a SHORTAGE of MWK 25,000 during today's cash count.",
+      "type": "warning",
+      "isRead": false,
+      "createdAt": "2026-09-14T17:01:00Z",
+      "linkView": "cash-control"
+    },
+    {
+      "id": "notif-02",
+      "orgId": "org-default-01",
+      "title": "Payment Pending Approval",
+      "message": "PAY-2026-000003 for Digital Hub Printing Press (MWK 1,850,000) requires sign-off.",
+      "type": "info",
+      "isRead": false,
+      "createdAt": "2026-08-11T15:10:00Z",
+      "linkView": "approvals"
+    }
+  ],
+  "lastSavedAt": "2026-09-14T12:33:50.029Z"
+}

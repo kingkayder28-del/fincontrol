@@ -1,0 +1,6 @@
+{
+  "name": "FinControl Pro",
+  "description": "Professional Financial Management, Cash Control, Payments & Reconciliation Platform",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
