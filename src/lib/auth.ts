@@ -2,26 +2,10 @@ import { AuthSession, LoginCredentials, User } from '../types';
 
 const AUTH_STORAGE_KEY = 'fincontrol_auth_session';
 const RECOVERY_STORAGE_PREFIX = 'fincontrol_recovery_';
+const BACKEND_URL = (typeof window !== 'undefined' && (window as any).__FINCONTROL_BACKEND_URL__) || 'http://localhost:4000';
 
 function normaliseEmail(email: string): string {
   return email.trim().toLowerCase();
-}
-
-function generateRecoveryPhrase(): string {
-  const words = [
-    'amber', 'atlas', 'beacon', 'bloom', 'cinder', 'copper', 'delta', 'dune',
-    'ember', 'everest', 'field', 'finch', 'glow', 'harbor', 'harmony', 'ivory',
-    'juniper', 'lagoon', 'lumen', 'mercy', 'meteor', 'noble', 'oasis', 'orbit',
-    'pearl', 'pioneer', 'quartz', 'river', 'summit', 'terra', 'vector', 'willow',
-    'zephyr', 'zenith'
-  ];
-
-  const phraseWords = Array.from({ length: 12 }, (_, index) => {
-    const wordIndex = (index * 7 + Date.now()) % words.length;
-    return words[wordIndex];
-  });
-
-  return phraseWords.join(' ');
 }
 
 /**
@@ -58,12 +42,12 @@ export function createRecoveryKeyForUser(email: string): string {
     throw new Error('An email address is required to create a recovery key.');
   }
 
-  const code = `FIN-${Math.random().toString(36).slice(2, 8).toUpperCase()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
-  const recoveryPhrase = generateRecoveryPhrase();
+  const bytes = new Uint8Array(12);
+  globalThis.crypto?.getRandomValues(bytes);
+  const code = `FIN-${Array.from(bytes.slice(0, 6), byte => byte.toString(16).padStart(2, '0')).join('').toUpperCase()}-${Array.from(bytes.slice(6), byte => byte.toString(16).padStart(2, '0')).join('').toUpperCase()}`;
   const payload = {
     email: validEmail,
     code,
-    recoveryPhrase,
     createdAt: new Date().toISOString()
   };
 
@@ -84,72 +68,28 @@ export function getRecoveryKeyForUser(email: string): string | null {
   }
 }
 
-export function getRecoveryBundleForUser(email: string): { code: string; recoveryPhrase: string; createdAt: string } | null {
-  const validEmail = normaliseEmail(email);
-  if (!validEmail) return null;
-
-  try {
-    const payload = localStorage.getItem(`${RECOVERY_STORAGE_PREFIX}${validEmail}`);
-    if (!payload) return null;
-    const parsed = JSON.parse(payload);
-    if (!parsed?.code || !parsed?.recoveryPhrase) return null;
-    return {
-      code: parsed.code,
-      recoveryPhrase: parsed.recoveryPhrase,
-      createdAt: parsed.createdAt
-    };
-  } catch {
-    return null;
-  }
-}
-
-export async function resetAdminPassword(
-  email: string,
-  newPassword: string,
-  users: User[]
-): Promise<User | null> {
-  const validEmail = normaliseEmail(email);
-  if (!validEmail && users.length === 0) {
-    return null;
-  }
-
-  if (newPassword.length < 10) {
-    throw new Error('Use a password with at least 10 characters.');
-  }
-
-  const adminUsers = users.filter(u => u.status !== 'suspended' && u.role === 'admin');
-  if (adminUsers.length === 0) {
-    return null;
-  }
-
-  const exactMatch = adminUsers.find(u => normaliseEmail(u.email) === validEmail);
-  const fallbackUser = exactMatch ?? (validEmail ? null : adminUsers[0]) ?? adminUsers[0];
-  const user = exactMatch ?? (adminUsers.length === 1 ? adminUsers[0] : fallbackUser);
-
-  if (!user) {
-    return null;
-  }
-
-  user.passwordHash = await createUserPassword(newPassword);
-  if (validEmail) {
-    localStorage.removeItem(`${RECOVERY_STORAGE_PREFIX}${validEmail}`);
-  }
-  return user;
-}
-
 export async function resetUserPasswordWithRecovery(
   email: string,
   newPassword: string,
   recoveryCode: string,
-  users: User[],
-  recoveryPhrase?: string
+  users: User[]
 ): Promise<User | null> {
   const validEmail = normaliseEmail(email);
   const trimmedCode = recoveryCode.trim();
-  const trimmedRecoveryPhrase = recoveryPhrase?.trim();
 
-  if (!validEmail || (!trimmedCode && !trimmedRecoveryPhrase)) {
+  if (!validEmail || !trimmedCode) {
     return null;
+  }
+
+  if (typeof window !== 'undefined') {
+    const response = await fetch(`${BACKEND_URL}/api/auth/reset-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: validEmail, recoveryCode: trimmedCode, newPassword })
+    });
+    if (!response.ok) return null;
+    const result = await response.json() as { user: User };
+    return result.user;
   }
 
   const storedRecovery = localStorage.getItem(`${RECOVERY_STORAGE_PREFIX}${validEmail}`);
@@ -159,10 +99,7 @@ export async function resetUserPasswordWithRecovery(
 
   try {
     const parsed = JSON.parse(storedRecovery);
-    const matchesCode = Boolean(trimmedCode) && parsed?.code === trimmedCode;
-    const matchesPhrase = Boolean(trimmedRecoveryPhrase) && parsed?.recoveryPhrase && parsed.recoveryPhrase.toLowerCase() === trimmedRecoveryPhrase.toLowerCase();
-
-    if (!parsed || (!matchesCode && !matchesPhrase)) {
+    if (!parsed || parsed.code !== trimmedCode) {
       return null;
     }
   } catch {
@@ -191,6 +128,16 @@ export async function loginUser(
   credentials: LoginCredentials,
   users: User[]
 ): Promise<{ session: AuthSession; user: User } | null> {
+  if (typeof window !== 'undefined') {
+    const response = await fetch(`${BACKEND_URL}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(credentials)
+    });
+    if (!response.ok) return null;
+    return await response.json() as { session: AuthSession; user: User };
+  }
+
   const user = users.find(u => u.email.toLowerCase() === credentials.email.trim().toLowerCase());
 
   if (!user) {
@@ -220,12 +167,39 @@ export async function loginUser(
     createdAt: new Date().toISOString()
   };
 
-  // Save to localStorage if rememberMe is true
   if (credentials.rememberMe) {
-    localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(session));
+    sessionStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(session));
+    localStorage.removeItem(AUTH_STORAGE_KEY);
   }
 
   return { session, user };
+}
+
+export async function bootstrapServerUser(user: User): Promise<string | null> {
+  if (typeof window === 'undefined') return null;
+  const response = await fetch(`${BACKEND_URL}/api/auth/bootstrap`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ user })
+  });
+  if (!response.ok && response.status !== 409) {
+    throw new Error('Unable to initialize the secure backend administrator.');
+  }
+  if (response.status === 409) return null;
+  const result = await response.json() as { recoveryCode?: string };
+  return result.recoveryCode || null;
+}
+
+export async function fetchServerAuthStatus(): Promise<{ setupRequired: boolean }> {
+  if (typeof window === 'undefined') return { setupRequired: false };
+  try {
+    const response = await fetch(`${BACKEND_URL}/api/auth/status`);
+    if (!response.ok) return { setupRequired: false };
+    const payload = await response.json() as { setupRequired?: boolean } | null;
+    return { setupRequired: Boolean(payload?.setupRequired) };
+  } catch {
+    return { setupRequired: false };
+  }
 }
 
 /**
@@ -233,40 +207,8 @@ export async function loginUser(
  */
 export function getCurrentSession(): AuthSession | null {
   try {
-    const sessionStr = sessionStorage.getItem(AUTH_STORAGE_KEY) || 
-                       localStorage.getItem(AUTH_STORAGE_KEY);
-    if (!sessionStr) {
-      const savedStore = localStorage.getItem('fincontrol_pro_data_v2') || sessionStorage.getItem('fincontrol_pro_data_v2_session');
-      if (!savedStore) return null;
-
-      const parsedStore = JSON.parse(savedStore) as { activeOrgId?: string; currentUser?: Partial<User>; users?: User[] };
-      const currentUser = parsedStore.currentUser;
-      const adminUser = parsedStore.users?.find(user => user.role === 'admin' && user.status !== 'suspended') || (currentUser ? {
-        id: currentUser.id || 'usr-admin-recovered',
-        orgId: currentUser.orgId || parsedStore.activeOrgId || 'org-default-01',
-        name: currentUser.name || 'Recovered Admin',
-        email: currentUser.email || 'admin@ledgernest.local',
-        role: 'admin',
-        mfaEnabled: Boolean(currentUser.mfaEnabled),
-        status: 'active'
-      } as User : null);
-
-      if (!adminUser || !adminUser.email) return null;
-
-      const recoveredSession: AuthSession = {
-        userId: adminUser.id,
-        orgId: adminUser.orgId || parsedStore.activeOrgId || 'org-default-01',
-        userName: adminUser.name,
-        userEmail: adminUser.email,
-        userRole: adminUser.role,
-        token: generateToken(),
-        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-        createdAt: new Date().toISOString()
-      };
-
-      setCurrentSession(recoveredSession, true);
-      return recoveredSession;
-    }
+    const sessionStr = sessionStorage.getItem(AUTH_STORAGE_KEY) || localStorage.getItem(AUTH_STORAGE_KEY);
+    if (!sessionStr) return null;
 
     const session: AuthSession = JSON.parse(sessionStr);
 
@@ -286,12 +228,14 @@ export function getCurrentSession(): AuthSession | null {
  */
 export function setCurrentSession(session: AuthSession, rememberMe: boolean = false): void {
   const sessionStr = JSON.stringify(session);
-  
+
   if (rememberMe) {
-    localStorage.setItem(AUTH_STORAGE_KEY, sessionStr);
-  } else {
     sessionStorage.setItem(AUTH_STORAGE_KEY, sessionStr);
+    localStorage.removeItem(AUTH_STORAGE_KEY);
+    return;
   }
+
+  sessionStorage.setItem(AUTH_STORAGE_KEY, sessionStr);
 }
 
 /**

@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ArrowRight, CheckCircle2, Lock, Mail, AlertCircle, Eye, EyeOff, Loader, ShieldCheck, UserRound, RotateCcw, Copy } from 'lucide-react';
-import { createRecoveryKeyForUser, createUserPassword, getRecoveryBundleForUser, getRecoveryKeyForUser, loginUser, resetAdminPassword, resetUserPasswordWithRecovery } from '../lib/auth';
+import { bootstrapServerUser, createRecoveryKeyForUser, createUserPassword, fetchServerAuthStatus, getRecoveryKeyForUser, loginUser, resetUserPasswordWithRecovery } from '../lib/auth';
 import { getStore, saveStore } from '../lib/storage';
 import { User, AuthSession } from '../types';
 
@@ -13,6 +13,22 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess, onError }) => {
   const store = getStore();
   const setupRequired = store.users.length === 0;
   const [isSetupMode, setIsSetupMode] = useState(setupRequired);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchServerAuthStatus().then(({ setupRequired: serverRequiresSetup }) => {
+      if (cancelled) return;
+      setIsSetupMode(Boolean(serverRequiresSetup) || store.users.length === 0);
+    }).catch(() => {
+      if (!cancelled) {
+        setIsSetupMode(store.users.length === 0);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [store.users.length]);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -20,13 +36,10 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess, onError }) => {
   const [rememberMe, setRememberMe] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showRecovery, setShowRecovery] = useState(false);
-  const [useEmergencyReset, setUseEmergencyReset] = useState(false);
   const [recoveryCode, setRecoveryCode] = useState('');
-  const [recoveryPhrase, setRecoveryPhrase] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
   const [recoveryCodeDisplay, setRecoveryCodeDisplay] = useState('');
-  const [recoveryPhraseDisplay, setRecoveryPhraseDisplay] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -46,38 +59,25 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess, onError }) => {
       if (newPassword !== confirmNewPassword) {
         throw new Error('The new passwords do not match.');
       }
-      if (!useEmergencyReset && !recoveryCode.trim() && !recoveryPhrase.trim()) {
-        throw new Error('Enter the recovery code or recovery phrase.');
+      if (!recoveryCode.trim()) {
+        throw new Error('Enter the recovery code.');
       }
 
-      const recoveredUser = useEmergencyReset
-        ? await resetAdminPassword(email.trim(), newPassword, currentStore.users)
-        : await resetUserPasswordWithRecovery(
-            email.trim(),
-            newPassword,
-            recoveryCode,
-            currentStore.users,
-            recoveryPhrase
-          );
+      const recoveredUser = await resetUserPasswordWithRecovery(email.trim(), newPassword, recoveryCode, currentStore.users);
       if (!recoveredUser) {
-        throw new Error(useEmergencyReset
-          ? 'Emergency admin reset failed. Verify the administrator email and try again.'
-          : 'Recovery failed. Check the email and the saved recovery code or recovery phrase.');
+        throw new Error('Recovery failed. Check the email and code, or create a new recovery code from a signed-in admin session.');
       }
 
       setRecoveryCodeDisplay('');
-      setRecoveryPhraseDisplay('');
       currentStore.currentUser = recoveredUser;
       saveStore(currentStore);
 
       setShowRecovery(false);
-      setUseEmergencyReset(false);
       setPassword('');
       setNewPassword('');
       setConfirmNewPassword('');
       setRecoveryCode('');
-      setRecoveryPhrase('');
-      setError(useEmergencyReset ? 'Admin password reset successful. Please sign in with your new password.' : 'Password reset successfully. Please sign in with your new password.');
+      setError('Password reset successfully. Please sign in with your new password.');
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Password recovery failed';
       setError(errorMsg);
@@ -131,12 +131,10 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess, onError }) => {
           status: 'active' as const,
           lastLogin: new Date().toISOString()
         };
+        const newRecoveryCode = await bootstrapServerUser(admin) || createRecoveryKeyForUser(admin.email);
         currentStore.users = [admin];
         currentStore.currentUser = admin;
-        const newRecoveryCode = createRecoveryKeyForUser(admin.email);
-        const savedRecovery = getRecoveryBundleForUser(admin.email);
-        setRecoveryCodeDisplay(savedRecovery?.code ?? newRecoveryCode);
-        setRecoveryPhraseDisplay(savedRecovery?.recoveryPhrase ?? '');
+        setRecoveryCodeDisplay(newRecoveryCode);
         saveStore(currentStore);
       }
 
@@ -199,7 +197,7 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess, onError }) => {
 
             {recoveryCodeDisplay && (
               <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-                <p className="font-semibold">Save these recovery details now</p>
+                <p className="font-semibold">Save this recovery code now</p>
                 <div className="mt-2 flex items-center justify-between gap-3 rounded-lg bg-white px-3 py-2 font-mono text-xs">
                   <span>{recoveryCodeDisplay}</span>
                   <button
@@ -210,36 +208,14 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess, onError }) => {
                     <Copy className="h-3 w-3" /> Copy
                   </button>
                 </div>
-                {recoveryPhraseDisplay && (
-                  <div className="mt-3 rounded-lg border border-amber-200 bg-white px-3 py-2 text-[11px] leading-5 text-amber-900">
-                    <div className="font-semibold uppercase tracking-[0.14em] text-[10px] text-amber-700">Recovery phrase</div>
-                    <div className="mt-1 font-medium break-words">{recoveryPhraseDisplay}</div>
-                  </div>
-                )}
               </div>
             )}
 
-            {showRecovery && email.trim() && getRecoveryBundleForUser(email.trim()) && (
+            {showRecovery && email.trim() && getRecoveryKeyForUser(email.trim()) && (
               <div className="rounded-xl border border-cyan-200 bg-cyan-50 p-3 text-sm text-cyan-900">
-                <p className="font-semibold">Saved recovery details</p>
+                <p className="font-semibold">Saved recovery code</p>
                 <p className="mt-2 font-mono text-xs">{getRecoveryKeyForUser(email.trim())}</p>
-                <p className="mt-2 text-[11px] leading-5">{getRecoveryBundleForUser(email.trim())?.recoveryPhrase}</p>
               </div>
-            )}
-
-            {showRecovery && (
-              <button
-                type="button"
-                onClick={() => {
-                  setUseEmergencyReset(!useEmergencyReset);
-                  setRecoveryCode('');
-                  setRecoveryPhrase('');
-                  setError(null);
-                }}
-                className="w-full rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-left text-sm font-medium text-amber-800 hover:bg-amber-100"
-              >
-                {useEmergencyReset ? 'Use saved recovery code instead' : 'I do not have my recovery code or phrase'}
-              </button>
             )}
 
             {!showRecovery && isSetupMode && (
@@ -270,52 +246,24 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess, onError }) => {
 
             {showRecovery ? (
               <>
-                {!useEmergencyReset && (
-                  <>
-                    <div>
-                      <label htmlFor="recoveryCode" className="block text-sm font-medium text-slate-700 mb-2">
-                        Recovery code
-                      </label>
-                      <div className="relative">
-                        <RotateCcw className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" />
-                        <input
-                          id="recoveryCode"
-                          type="text"
-                          value={recoveryCode}
-                          onChange={(e) => setRecoveryCode(e.target.value)}
-                          placeholder="FIN-XXXX-XXXX"
-                          className="w-full rounded-xl border border-slate-200 bg-white py-3 pl-10 pr-4 outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100"
-                          disabled={isLoading}
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label htmlFor="recoveryPhrase" className="block text-sm font-medium text-slate-700 mb-2">
-                        Recovery phrase
-                      </label>
-                      <div className="relative">
-                        <ShieldCheck className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" />
-                        <input
-                          id="recoveryPhrase"
-                          type="text"
-                          value={recoveryPhrase}
-                          onChange={(e) => setRecoveryPhrase(e.target.value)}
-                          placeholder="twelve word backup phrase"
-                          className="w-full rounded-xl border border-slate-200 bg-white py-3 pl-10 pr-4 outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100"
-                          disabled={isLoading}
-                        />
-                      </div>
-                    </div>
-                  </>
-                )}
-
-                {useEmergencyReset && (
-                  <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-                    <p className="font-semibold">Emergency admin reset</p>
-                    <p className="mt-1">This resets the administrator password only. Your organization data remains intact.</p>
+                <div>
+                  <label htmlFor="recoveryCode" className="block text-sm font-medium text-slate-700 mb-2">
+                    Recovery code
+                  </label>
+                  <div className="relative">
+                    <RotateCcw className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" />
+                    <input
+                      id="recoveryCode"
+                      type="text"
+                      value={recoveryCode}
+                      onChange={(e) => setRecoveryCode(e.target.value)}
+                      placeholder="FIN-XXXX-XXXX"
+                      className="w-full rounded-xl border border-slate-200 bg-white py-3 pl-10 pr-4 outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100"
+                      required
+                      disabled={isLoading}
+                    />
                   </div>
-                )}
+                </div>
 
                 <div>
                   <label htmlFor="newPassword" className="block text-sm font-medium text-slate-700 mb-2">
@@ -431,9 +379,7 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess, onError }) => {
                 onClick={() => {
                   setError(null);
                   setShowRecovery(false);
-                  setUseEmergencyReset(false);
                   setRecoveryCode('');
-                  setRecoveryPhrase('');
                   setNewPassword('');
                   setConfirmNewPassword('');
                 }}

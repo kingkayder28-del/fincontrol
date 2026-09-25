@@ -44,7 +44,7 @@ export const CashControlView: React.FC<CashControlViewProps> = ({
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
 
   const dailyCashPosition = targetAccount
-    ? calculateDailyCashPosition(orgId, countDate)
+    ? calculateDailyCashPosition(orgId, countDate, targetAccount.id)
     : { openingCash: 0, cashReceipts: 0, cashPayments: 0, expectedClosingCash: 0 };
   const { openingCash, cashReceipts: receiptsForAcct, cashPayments: paymentsForAcct, expectedClosingCash } = dailyCashPosition;
   const paymentMethodLabels: Record<string, string> = {

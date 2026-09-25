@@ -24,16 +24,102 @@ import {
 
 const STORAGE_KEY = 'fincontrol_pro_data_v2';
 const SESSION_SNAPSHOT_KEY = 'fincontrol_pro_data_v2_session';
+const UI_PREFERENCE_KEY = 'fincontrol_ui_preferences';
+const BACKEND_URL = (typeof window !== 'undefined' && (window as any).__FINCONTROL_BACKEND_URL__) || 'http://localhost:4000';
 
-function persistSnapshot(store: AppDataStore) {
-  const snapshot = JSON.stringify(store);
+function getAuthHeaders(): Record<string, string> {
+  if (typeof window === 'undefined') return {};
+  try {
+    const rawSession = sessionStorage.getItem('fincontrol_auth_session') || localStorage.getItem('fincontrol_auth_session');
+    const session = rawSession ? JSON.parse(rawSession) : null;
+    return session?.token ? { Authorization: `Bearer ${session.token}` } : {};
+  } catch {
+    return {};
+  }
+}
+
+async function syncSnapshotToServer(_snapshot: AppDataStore) {
+  if (typeof window === 'undefined') return;
+
+  // Whole-store synchronization is intentionally disabled. Browser snapshots are a temporary UI cache only.
+  return;
+}
+
+async function hydrateStoreFromServer(): Promise<AppDataStore | null> {
+  if (typeof window === 'undefined') return null;
 
   try {
-    localStorage.setItem(STORAGE_KEY, snapshot);
-    sessionStorage.setItem(SESSION_SNAPSHOT_KEY, snapshot);
+    const response = await fetch(`${BACKEND_URL}/api/store`, { headers: getAuthHeaders() });
+    if (!response.ok) {
+      if (response.status === 401) {
+        const statusResponse = await fetch(`${BACKEND_URL}/api/auth/status`);
+        const status = await statusResponse.json().catch(() => null) as { setupRequired?: boolean } | null;
+        if (status?.setupRequired) {
+          return { ...getLocalInitialStore(), currentUser: {} as User, users: [] };
+        }
+      }
+      return null;
+    }
+
+    const serverData = await response.json();
+    if (serverData && typeof serverData === 'object' && Array.isArray(serverData.organizations)) {
+      return serverData as AppDataStore;
+    }
   } catch (error) {
-    console.error('Failed to persist snapshot to browser storage', error);
+    console.warn('Server unavailable; browser cache is not treated as financial truth.', error);
   }
+
+  return null;
+}
+
+export async function migrateLocalDataToServer(): Promise<boolean> {
+  if (typeof window === 'undefined') return false;
+
+  const persistedState = localStorage.getItem(STORAGE_KEY) || sessionStorage.getItem(SESSION_SNAPSHOT_KEY);
+  if (!persistedState) {
+    return false;
+  }
+
+  try {
+    const parsed = JSON.parse(persistedState) as Partial<AppDataStore>;
+    const hasData = !!parsed && (Array.isArray(parsed.organizations) || Array.isArray(parsed.users) || Array.isArray(parsed.receipts) || Array.isArray(parsed.payments));
+    if (!hasData) {
+      return false;
+    }
+
+    const response = await fetch(`${BACKEND_URL}/api/import`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+      body: persistedState,
+    });
+
+    if (!response.ok) {
+      console.warn('Local data migration to server failed:', response.statusText);
+      return false;
+    }
+
+    console.info('Local finance data migrated to server-backed backup successfully.');
+    return true;
+  } catch (error) {
+    console.warn('Migration to server failed; local data remains untouched.', error);
+    return false;
+  }
+}
+
+function persistSnapshot(_store: AppDataStore) {
+  try {
+    const uiPrefs = {
+      activeOrgId: _store.activeOrgId,
+      currentUserId: _store.currentUser?.id || null,
+      savedAt: new Date().toISOString()
+    };
+    localStorage.setItem(UI_PREFERENCE_KEY, JSON.stringify(uiPrefs));
+    sessionStorage.setItem(UI_PREFERENCE_KEY, JSON.stringify(uiPrefs));
+  } catch (error) {
+    console.warn('Failed to persist non-authoritative UI preferences', error);
+  }
+
+  void syncSnapshotToServer(_store);
 }
 
 export const SUPPORTED_CURRENCIES: CurrencyConfig[] = [
@@ -565,8 +651,10 @@ export interface AppDataStore {
   notifications: Notification[];
 }
 
-function getInitialStore(): AppDataStore {
-  const persistedState = localStorage.getItem(STORAGE_KEY) || sessionStorage.getItem(SESSION_SNAPSHOT_KEY);
+function getLocalInitialStore(): AppDataStore {
+  const storage = typeof globalThis !== 'undefined' ? (globalThis as any).localStorage : undefined;
+  const sessionStorageRef = typeof globalThis !== 'undefined' ? (globalThis as any).sessionStorage : undefined;
+  const persistedState = storage?.getItem(STORAGE_KEY) || sessionStorageRef?.getItem(SESSION_SNAPSHOT_KEY);
 
   if (persistedState) {
     try {
@@ -620,41 +708,29 @@ function getInitialStore(): AppDataStore {
   };
 }
 
+function getInitialStore(): AppDataStore {
+  const fallback = getLocalInitialStore();
+  if (typeof window === 'undefined' && !globalThis.localStorage) {
+    return fallback;
+  }
+  void hydrateStoreFromServer().then(serverStore => {
+    if (serverStore) {
+      currentStore = serverStore;
+      persistSnapshot(serverStore);
+      listeners.forEach(fn => fn());
+      return;
+    }
+
+    void migrateLocalDataToServer();
+  });
+
+  return fallback;
+}
+
 let currentStore: AppDataStore = getInitialStore();
 const listeners: Array<() => void> = [];
 
-function computeAccountBalanceFromLedger(store: AppDataStore, orgId: string, accountId: string): number {
-  const account = store.accounts.find(a => a.id === accountId && a.orgId === orgId);
-  if (!account) return 0;
-
-  const receipts = store.receipts
-    .filter(r => r.orgId === orgId && r.accountId === accountId)
-    .reduce((sum, receipt) => sum + receipt.amount, 0);
-
-  const payments = store.payments
-    .filter(p => p.orgId === orgId && p.accountId === accountId && (p.status === 'approved' || p.status === 'paid'))
-    .reduce((sum, payment) => sum + payment.amount, 0);
-
-  const incomingTransfers = store.transfers
-    .filter(t => t.orgId === orgId && t.toAccountId === accountId)
-    .reduce((sum, transfer) => sum + transfer.amount, 0);
-
-  const outgoingTransfers = store.transfers
-    .filter(t => t.orgId === orgId && t.fromAccountId === accountId)
-    .reduce((sum, transfer) => sum + transfer.amount + transfer.feeAmount, 0);
-
-  return receipts - payments + incomingTransfers - outgoingTransfers;
-}
-
-function reconcileAccountBalances(store: AppDataStore) {
-  store.accounts = store.accounts.map(account => ({
-    ...account,
-    currentBalance: computeAccountBalanceFromLedger(store, account.orgId, account.id)
-  }));
-}
-
 export function saveStore(store: AppDataStore) {
-  reconcileAccountBalances(store);
   currentStore = store;
   persistSnapshot(store);
   listeners.forEach(fn => fn());
@@ -895,7 +971,33 @@ export function calculateAccountBalance(orgId: string, accountId: string): numbe
     .filter(t => t.orgId === orgId && t.fromAccountId === accountId)
     .reduce((sum, transfer) => sum + transfer.amount + transfer.feeAmount, 0);
 
-  return receipts - payments + incomingTransfers - outgoingTransfers;
+  return account.openingBalance + receipts - payments + incomingTransfers - outgoingTransfers;
+}
+
+export function calculateDailyCashPosition(orgId: string, date: string, accountId?: string) {
+  const store = getStore();
+  const cashAccounts = store.accounts.filter(account =>
+    account.orgId === orgId && account.type === 'cash' && (!accountId || account.id === accountId)
+  );
+  const receipts = store.receipts.filter(receipt =>
+    receipt.orgId === orgId && receipt.date <= date && receipt.paymentMethod === 'cash' &&
+    cashAccounts.some(account => account.id === receipt.accountId)
+  );
+  const payments = store.payments.filter(payment =>
+    payment.orgId === orgId && payment.date <= date && payment.paymentMethod === 'cash' &&
+    (payment.status === 'approved' || payment.status === 'paid') &&
+    cashAccounts.some(account => account.id === payment.accountId)
+  );
+  const openingCash = cashAccounts.reduce((sum, account) => sum + account.openingBalance, 0);
+  const cashReceipts = receipts.reduce((sum, receipt) => sum + receipt.amount, 0);
+  const cashPayments = payments.reduce((sum, payment) => sum + payment.amount, 0);
+
+  return {
+    openingCash,
+    cashReceipts,
+    cashPayments,
+    expectedClosingCash: openingCash + cashReceipts - cashPayments
+  };
 }
 
 function getProductFieldValue(row: Record<string, unknown>, candidates: string[]): string {
@@ -1075,14 +1177,10 @@ export function findInventoryProductMatch(orgId: string, query: string): Invento
 
   for (const item of items) {
     const normalizedName = normalizeInventoryName(item.productName);
-    const normalizedSku = normalizeInventoryName(item.sku);
-    const exact = normalizedName === normalizedQuery || normalizedSku === normalizedQuery;
-    const contains = normalizedName.includes(normalizedQuery)
-      || normalizedQuery.includes(normalizedName)
-      || normalizedSku.includes(normalizedQuery)
-      || normalizedQuery.includes(normalizedSku);
+    const exact = normalizedName === normalizedQuery;
+    const contains = normalizedName.includes(normalizedQuery) || normalizedQuery.includes(normalizedName);
     const tokens = normalizedQuery.split(' ').filter(Boolean);
-    const tokenMatch = tokens.some(token => normalizedName.includes(token) || normalizedSku.includes(token));
+    const tokenMatch = tokens.some(token => normalizedName.includes(token));
     const score = exact ? 1 : contains ? 0.9 : tokenMatch ? 0.7 : 0;
 
     if (score > bestScore) {
@@ -1106,11 +1204,9 @@ export function getInventoryProductSuggestions(orgId: string, query: string): In
   return items
     .map(item => {
       const normalizedName = normalizeInventoryName(item.productName);
-      const normalizedSku = normalizeInventoryName(item.sku);
-      const searchableText = `${normalizedName} ${normalizedSku}`;
-      const score = normalizedName === normalizedQuery || normalizedSku === normalizedQuery ? 3
-        : searchableText.includes(normalizedQuery) || normalizedQuery.includes(normalizedName) || normalizedQuery.includes(normalizedSku) ? 2
-        : normalizedQuery.split(' ').filter(Boolean).some(token => searchableText.includes(token)) ? 1
+      const score = normalizedName === normalizedQuery ? 3
+        : normalizedName.includes(normalizedQuery) || normalizedQuery.includes(normalizedName) ? 2
+        : normalizedName.split(' ').filter(Boolean).some(token => normalizedQuery.includes(token)) ? 1
         : 0;
       return { item, score };
     })
@@ -1134,46 +1230,6 @@ export function updateInventoryFromReceipt(orgId: string, receipt: Receipt) {
   saveStore(store);
 }
 
-export function calculateDailyCashPosition(orgId: string, date: string) {
-  const store = getStore();
-  const cashAccounts = store.accounts.filter(item => item.orgId === orgId && item.type === 'cash');
-  if (cashAccounts.length === 0) {
-    return { openingCash: 0, cashReceipts: 0, cashPayments: 0, expectedClosingCash: 0 };
-  }
-
-  const cashAccountIds = new Set(cashAccounts.map(account => account.id));
-  const receipts = store.receipts.filter(receipt => receipt.orgId === orgId && cashAccountIds.has(receipt.accountId));
-  const payments = store.payments.filter(payment =>
-    payment.orgId === orgId && cashAccountIds.has(payment.accountId) &&
-    (payment.status === 'approved' || payment.status === 'paid')
-  );
-  const openingCash = cashAccounts.reduce((sum, account) => {
-    const priorCashCount = store.cashCounts
-      .filter(count => count.orgId === orgId && count.accountId === account.id && count.date < date)
-      .sort((a, b) => `${b.date}${b.createdAt}`.localeCompare(`${a.date}${a.createdAt}`))[0];
-    const transactionStartDate = priorCashCount?.date || '';
-    const accountOpening = priorCashCount?.actualPhysicalCash ?? 0;
-    const receiptsAfterOpening = receipts
-      .filter(receipt => receipt.accountId === account.id && receipt.date > transactionStartDate && receipt.date < date && receipt.paymentMethod === 'cash')
-      .reduce((accountSum, receipt) => accountSum + receipt.amount, 0);
-    const paymentsAfterOpening = payments
-      .filter(payment => payment.accountId === account.id && payment.date > transactionStartDate && payment.date < date && payment.paymentMethod === 'cash')
-      .reduce((accountSum, payment) => accountSum + payment.amount, 0);
-    return sum + accountOpening + receiptsAfterOpening - paymentsAfterOpening;
-  }, 0);
-  const cashReceipts = receipts.filter(receipt => receipt.date === date && receipt.paymentMethod === 'cash')
-    .reduce((sum, receipt) => sum + receipt.amount, 0);
-  const cashPayments = payments.filter(payment => payment.date === date && payment.paymentMethod === 'cash')
-    .reduce((sum, payment) => sum + payment.amount, 0);
-
-  return {
-    openingCash,
-    cashReceipts,
-    cashPayments,
-    expectedClosingCash: openingCash + cashReceipts - cashPayments
-  };
-}
-
 // Financial calculations engine - computed dynamically from underlying transactions
 export function calculateFinancialSummary(orgId: string): FinancialSummary {
   const store = getStore();
@@ -1188,30 +1244,41 @@ export function calculateFinancialSummary(orgId: string): FinancialSummary {
 
   // Receipts today
   const todayReceiptsObj = receipts.filter(r => r.date === today);
-  const todayReceiptsGross = todayReceiptsObj.reduce((sum, r) => sum + r.amount, 0);
+  const todayReceipts = todayReceiptsObj.reduce((sum, r) => sum + r.amount, 0);
 
   // Payments today
   const todayPaymentsObj = payments.filter(p => p.date === today && (p.status === 'approved' || p.status === 'paid'));
   const todayPayments = todayPaymentsObj.reduce((sum, p) => sum + p.amount, 0);
 
-  // Channel balances use the recorded transaction method and start at zero.
-  const calculateChannelBalance = (method: Receipt['paymentMethod']) => {
-    const channelReceipts = receipts
-      .filter(receipt => receipt.paymentMethod === method)
-      .reduce((sum, receipt) => sum + receipt.amount, 0);
-    const channelPayments = payments
-      .filter(payment => payment.paymentMethod === method && (payment.status === 'approved' || payment.status === 'paid'))
-      .reduce((sum, payment) => sum + payment.amount, 0);
-    return channelReceipts - channelPayments;
+  // Cash account calculation
+  const cashAccounts = accounts.filter(a => a.type === 'cash');
+  const bankAccounts = accounts.filter(a => a.type === 'bank');
+  const mobileAccounts = accounts.filter(a => a.type === 'mobile_money');
+
+  // Compute live current balances dynamically for each account
+  // Opening balance + Receipts to account - Payments from account + Incoming transfers - Outgoing transfers
+  const getAccountDynamicBalance = (acctId: string) => {
+    return calculateAccountBalance(orgId, acctId);
   };
 
-  const totalCashBalance = calculateChannelBalance('cash');
-  const totalBankBalance = calculateChannelBalance('bank');
-  const totalMobileMoneyBalance = calculateChannelBalance('mobile_money');
+  const totalCashBalance = cashAccounts.reduce((sum, a) => sum + getAccountDynamicBalance(a.id), 0);
+  const totalBankBalance = bankAccounts.reduce((sum, a) => sum + getAccountDynamicBalance(a.id), 0);
+  const mobileAccountIds = new Set(mobileAccounts.map(account => account.id));
+  const mobileMoneyReceipts = receipts
+    .filter(receipt => receipt.paymentMethod === 'mobile_money' && !mobileAccountIds.has(receipt.accountId))
+    .reduce((sum, receipt) => sum + receipt.amount, 0);
+  const mobileMoneyPayments = payments
+    .filter(payment => payment.paymentMethod === 'mobile_money' && !mobileAccountIds.has(payment.accountId) &&
+      (payment.status === 'approved' || payment.status === 'paid'))
+    .reduce((sum, payment) => sum + payment.amount, 0);
+  const totalMobileMoneyBalance = mobileAccounts.reduce((sum, a) => sum + getAccountDynamicBalance(a.id), 0) +
+    mobileMoneyReceipts - mobileMoneyPayments;
 
   // Today Cash calculation
-  const dailyCashPosition = calculateDailyCashPosition(orgId, today);
-  const { openingCash: openingCashToday, cashReceipts: cashReceiptsToday, cashPayments: cashPaymentsToday, expectedClosingCash: expectedClosingCashToday } = dailyCashPosition;
+  const openingCashToday = cashAccounts.reduce((sum, a) => sum + a.openingBalance, 0);
+  const cashReceiptsToday = todayReceiptsObj.filter(r => r.paymentMethod === 'cash').reduce((sum, r) => sum + r.amount, 0);
+  const cashPaymentsToday = todayPaymentsObj.filter(p => p.paymentMethod === 'cash').reduce((sum, p) => sum + p.amount, 0);
+  const expectedClosingCashToday = openingCashToday + cashReceiptsToday - cashPaymentsToday;
 
   const latestCountToday = cashCounts.find(c => c.date === today);
   const actualClosingCashToday = latestCountToday ? latestCountToday.actualPhysicalCash : expectedClosingCashToday;
@@ -1252,7 +1319,7 @@ export function calculateFinancialSummary(orgId: string): FinancialSummary {
   const taxableIncomeYTD = Math.max(0, netProfitYTD);
 
   return {
-    todayReceipts: todayReceiptsGross,
+    todayReceipts,
     todayPayments,
     openingCashToday,
     expectedClosingCashToday,

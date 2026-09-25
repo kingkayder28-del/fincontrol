@@ -235,33 +235,29 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
     logAudit('REPORT_EXPORTED', 'Reports', `Exported CSV for ${currentReport.title}`);
   };
 
-  const handleGenerateShareLink = () => {
-    const shareCode = `SHR-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
+  const handleGenerateShareLink = async () => {
     const expiresAt = new Date(Date.now() + shareExpiryHours * 3600000).toISOString();
 
-    const newLink: ReportShareLink = {
-      id: `share-${Date.now()}`,
-      orgId,
-      reportTitle: currentReport.title,
-      reportType: selectedReportType,
-      shareCode,
-      passcode: sharePasscode.trim() || undefined,
-      viewOnly: true,
-      restrictDownload: false,
-      expiresAt,
-      createdBy: currentUser.name,
-      createdAt: new Date().toISOString(),
-      isRevoked: false
-    };
+    const rawSession = sessionStorage.getItem('fincontrol_auth_session') || localStorage.getItem('fincontrol_auth_session');
+    const session = rawSession ? JSON.parse(rawSession) : null;
+    const backendUrl = (typeof window !== 'undefined' && (window as any).__FINCONTROL_BACKEND_URL__) || 'http://localhost:4000';
+    const response = await fetch(`${backendUrl}/api/reports/share`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(session?.token ? { Authorization: `Bearer ${session.token}` } : {}) },
+      body: JSON.stringify({ orgId, reportTitle: currentReport.title, reportType: selectedReportType, expiresAt, passcode: sharePasscode.trim() || undefined })
+    });
+    if (!response.ok) throw new Error('Unable to create a secure shared report.');
+    const result = await response.json() as { share: ReportShareLink; token: string };
+    const newLink = { ...result.share, shareCode: result.token };
 
     store.shareLinks.unshift(newLink);
     saveStore(store);
-    logAudit('REPORT_SHARE_LINK_CREATED', 'Reports', `Created secure share link for ${currentReport.title} (Code: ${shareCode})`);
+    logAudit('REPORT_SHARE_LINK_CREATED', 'Reports', `Created secure share link for ${currentReport.title} (Code: ${newLink.shareCode})`);
 
     setGeneratedShareLink(newLink);
   };
 
-  const getShareUrl = (shareCode: string) => `${window.location.origin}${window.location.pathname}?share=${encodeURIComponent(shareCode)}&org=${encodeURIComponent(orgId)}`;
+  const getShareUrl = (shareCode: string) => `${window.location.origin}${window.location.pathname.replace(/\/$/, '')}/shared/${encodeURIComponent(shareCode)}`;
 
   const handleCopyShareUrl = async (shareCode: string) => {
     await navigator.clipboard.writeText(getShareUrl(shareCode));

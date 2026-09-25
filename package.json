@@ -8,6 +8,8 @@
     "server": "node server.js",
     "dev:full": "node server.js & node scripts/start-vite.mjs",
     "build": "vite build",
+    "test": "tsx tests/password-recovery.test.ts && tsx tests/mobile-money-summary.test.ts && tsx tests/server-security.test.ts && tsx tests/stale-snapshot.test.ts && tsx tests/session-restart.test.ts",
+    "seed:demo": "node scripts/seed-demo.mjs",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",

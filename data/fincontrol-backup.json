@@ -29,30 +29,9 @@
     }
   ],
   "activeOrgId": "org-default-01",
-  "currentUser": {
-    "id": "usr-admin-1789389534884",
-    "orgId": "org-default-01",
-    "name": "Admin Recovery",
-    "email": "admin@fincontrolpro.local",
-    "role": "admin",
-    "passwordHash": "d6209fbf652f14d13c990e04964a975569f9888bf4c3020c04f0a7c94835e155",
-    "mfaEnabled": false,
-    "status": "active",
-    "lastLogin": "2026-09-14T12:38:54.885Z"
-  },
-  "users": [
-    {
-      "id": "usr-admin-1789389534884",
-      "orgId": "org-default-01",
-      "name": "Admin Recovery",
-      "email": "admin@fincontrolpro.local",
-      "role": "admin",
-      "passwordHash": "d6209fbf652f14d13c990e04964a975569f9888bf4c3020c04f0a7c94835e155",
-      "mfaEnabled": false,
-      "status": "active",
-      "lastLogin": "2026-09-14T12:38:54.885Z"
-    }
-  ],
+  "currentUser": {},
+  "users": [],
+  "recoveryCodes": {},
   "accounts": [
     {
       "id": "acct-cash-01",
@@ -558,5 +537,5 @@
       "linkView": "approvals"
     }
   ],
-  "lastSavedAt": "2026-09-14T12:48:08.855Z"
+  "lastSavedAt": "2026-09-14T12:48:07.905Z"
 }

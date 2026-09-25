@@ -40,20 +40,24 @@ import {
   saveStore
 } from './lib/storage';
 import { Organization, User, AuthSession } from './types';
-import { getCurrentSession, setCurrentSession, logoutUser, isAuthenticated } from './lib/auth';
+import { getCurrentSession, setCurrentSession, logoutUser, isAuthenticated, fetchServerAuthStatus } from './lib/auth';
 import { applyOrgTheme } from './lib/theme';
 import { downloadOrganizationArchive } from './lib/storage';
 import { X, Wallet, Calculator, Clock, FolderGit2, ShieldCheck, Settings, HelpCircle, BookOpen, Sparkles, TrendingUp } from 'lucide-react';
 
+const BACKEND_URL = (typeof window !== 'undefined' && (window as any).__FINCONTROL_BACKEND_URL__) || 'http://localhost:4000';
+
 export default function App() {
   const sharedParams = new URLSearchParams(window.location.search);
+  const sharedPathToken = window.location.pathname.match(/^\/shared\/([^/]+)/)?.[1];
   const sharedOrgId = sharedParams.get('org');
+  const isPublicSharedReport = Boolean(sharedPathToken || sharedParams.has('share'));
   // Authentication State
   const [authSession, setAuthSession] = useState<AuthSession | null>(getCurrentSession());
   const [isAuthenticating, setIsAuthenticating] = useState(!isAuthenticated());
 
   const [storeState, setStoreState] = useState(getStore());
-  const [currentView, setCurrentView] = useState(sharedParams.has('share') ? 'shared-report' : 'organizations');
+  const [currentView, setCurrentView] = useState(isPublicSharedReport ? 'shared-report' : 'organizations');
   const [viewFilterParams, setViewFilterParams] = useState<any>(null);
 
   const [activeOrg, setActiveOrg] = useState<Organization>(() =>
@@ -73,7 +77,7 @@ export default function App() {
   const [notificationsDrawerOpen, setNotificationsDrawerOpen] = useState(false);
   const [setupWizardOpen, setSetupWizardOpen] = useState(false);
   const [mobileMoreMenuOpen, setMobileMoreMenuOpen] = useState(false);
-  const [sharedReportCode, setSharedReportCode] = useState<string | null>(sharedParams.get('share'));
+  const [sharedReportCode, setSharedReportCode] = useState<string | null>(sharedPathToken || sharedParams.get('share'));
 
   // Subscribe to storage changes
   useEffect(() => {
@@ -82,8 +86,56 @@ export default function App() {
       setStoreState({ ...updatedStore });
       setActiveOrg(getActiveOrganization());
       setCurrentUser(getActiveUser());
+      if (updatedStore.users.length === 0) {
+        logoutUser();
+        setAuthSession(null);
+        setIsAuthenticating(true);
+      }
     });
     return unsubscribe;
+  }, []);
+
+  useEffect(() => {
+    const session = getCurrentSession();
+    if (typeof window === 'undefined') return;
+
+    void fetchServerAuthStatus().then(({ setupRequired }) => {
+      if (setupRequired) {
+        logoutUser();
+        setAuthSession(null);
+        setCurrentUser(getActiveUser());
+        setIsAuthenticating(true);
+        return;
+      }
+
+      if (!session) {
+        setIsAuthenticating(true);
+        return;
+      }
+
+      fetch(`${BACKEND_URL}/api/auth/me`, {
+        headers: { Authorization: `Bearer ${session.token}` }
+      }).then(async response => {
+        if (response.status === 401) {
+          logoutUser();
+          setAuthSession(null);
+          setIsAuthenticating(true);
+          return;
+        }
+
+        if (response.ok) {
+          const payload = await response.json() as { session?: AuthSession; user?: User };
+          const serverSession = payload.session || session;
+          const serverUser = payload.user || getActiveUser();
+          setAuthSession(serverSession);
+          setCurrentUser(serverUser);
+          setCurrentSession(serverSession, true);
+          setIsAuthenticating(false);
+        }
+      }).catch(() => {
+        // Keep local-first behavior when the optional backend is offline.
+      });
+    });
   }, []);
 
   // Sync dark mode class
@@ -194,12 +246,24 @@ export default function App() {
   };
 
   // Show login screen if not authenticated
-  if (isAuthenticating || !authSession) {
+  if ((isAuthenticating || !authSession) && !isPublicSharedReport) {
     return (
       <Login
         onLoginSuccess={handleLoginSuccess}
         onError={(error) => console.error('Login error:', error)}
       />
+    );
+  }
+
+  if (isPublicSharedReport && !authSession) {
+    return (
+      <div className="min-h-screen bg-[var(--bg)] p-4 md:p-8 text-[var(--text)]">
+        <SharedReportView
+          shareCode={sharedReportCode || ''}
+          organization={activeOrg}
+          onBack={() => { window.location.href = '/'; }}
+        />
+      </div>
     );
   }
 

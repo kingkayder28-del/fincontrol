@@ -15,7 +15,8 @@ import {
   CheckCircle2,
   AlertTriangle,
   Clock,
-  Plus
+  Plus,
+  Pencil
 } from 'lucide-react';
 import { Organization, User, Receipt as ReceiptType, Payment as PaymentType, Transfer as TransferType } from '../types';
 import { getStore, saveStore, formatCurrency, logAudit } from '../lib/storage';
@@ -49,6 +50,8 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
   const [selectedTxnType, setSelectedTxnType] = useState<'receipt' | 'payment' | 'transfer'>('receipt');
   const [voidModalOpen, setVoidModalOpen] = useState(false);
   const [voidReason, setVoidReason] = useState('');
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editForm, setEditForm] = useState({ date: '', time: '', party: '', description: '', amount: '', paymentMethod: 'cash', accountId: '' });
 
   const receipts = store.receipts.filter(r => r.orgId === orgId);
   const payments = store.payments.filter(p => p.orgId === orgId);
@@ -128,6 +131,61 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
     }
 
     setVoidModalOpen(false);
+    setSelectedTxn(null);
+  };
+
+  const openEditTransaction = () => {
+    if (!selectedTxn || selectedTxnType === 'transfer' || selectedTxn.status === 'voided') return;
+    setEditForm({
+      date: selectedTxn.date,
+      time: selectedTxn.time || '',
+      party: selectedTxn.receivedFrom || selectedTxn.payee || '',
+      description: selectedTxn.description || '',
+      amount: String(selectedTxn.amount),
+      paymentMethod: selectedTxn.paymentMethod,
+      accountId: selectedTxn.accountId
+    });
+    setEditModalOpen(true);
+  };
+
+  const handleEditTransaction = () => {
+    if (!selectedTxn || selectedTxnType === 'transfer') return;
+    const amount = Number(editForm.amount);
+    if (!editForm.date || !editForm.party.trim() || !editForm.description.trim() || !editForm.accountId || amount <= 0) {
+      return alert('Date, party/payee, description, account, and a positive amount are required.');
+    }
+
+    const oldAmount = selectedTxn.amount;
+    const target = selectedTxnType === 'receipt'
+      ? store.receipts.find(receipt => receipt.id === selectedTxn.id)
+      : store.payments.find(payment => payment.id === selectedTxn.id);
+    if (!target) return;
+
+    if (selectedTxnType === 'receipt') {
+      const receipt = target as ReceiptType;
+      const product = receipt.productId ? store.inventory.find(item => item.id === receipt.productId) : undefined;
+      const calculatedAmount = product && receipt.quantity ? product.unitPrice * receipt.quantity : amount;
+      receipt.date = editForm.date;
+      receipt.time = editForm.time;
+      receipt.receivedFrom = editForm.party.trim();
+      receipt.description = editForm.description.trim();
+      receipt.amount = calculatedAmount;
+      receipt.paymentMethod = editForm.paymentMethod as ReceiptType['paymentMethod'];
+      receipt.accountId = editForm.accountId;
+    } else {
+      const payment = target as PaymentType;
+      payment.date = editForm.date;
+      payment.time = editForm.time;
+      payment.payee = editForm.party.trim();
+      payment.description = editForm.description.trim();
+      payment.amount = amount;
+      payment.paymentMethod = editForm.paymentMethod as PaymentType['paymentMethod'];
+      payment.accountId = editForm.accountId;
+    }
+
+    saveStore(store);
+    logAudit('TRANSACTION_EDITED', selectedTxnType === 'receipt' ? 'Receipts' : 'Payments', `Edited ${selectedTxn.receiptNumber || selectedTxn.paymentNumber}. Amount changed from ${oldAmount} to ${amount}.`);
+    setEditModalOpen(false);
     setSelectedTxn(null);
   };
 
@@ -433,9 +491,20 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
                   {selectedTxn.receiptNumber || selectedTxn.paymentNumber || selectedTxn.transferNumber}
                 </h3>
               </div>
-              <button onClick={() => setSelectedTxn(null)} className="p-1 text-slate-400 hover:text-slate-600">
-                <X className="w-5 h-5" />
-              </button>
+              <div className="flex items-center gap-2">
+                {selectedTxnType !== 'transfer' && selectedTxn.status !== 'voided' && (
+                  <button
+                    onClick={openEditTransaction}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-blue-600 px-3 py-2 text-xs font-bold text-white shadow-sm hover:bg-blue-500"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                    Edit Transaction
+                  </button>
+                )}
+                <button onClick={() => setSelectedTxn(null)} className="p-1 text-slate-400 hover:text-slate-600">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
 
             <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 space-y-3 text-xs">
@@ -473,6 +542,15 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
                 >
                   <Ban className="w-4 h-4" />
                   <span>Void Transaction</span>
+                </button>
+              )}
+              {selectedTxnType !== 'transfer' && selectedTxn.status !== 'voided' && (
+                <button
+                  onClick={openEditTransaction}
+                  className="px-3 py-2 rounded-xl bg-blue-100 dark:bg-blue-950/80 text-blue-700 dark:text-blue-300 font-bold text-xs flex items-center gap-1.5 hover:bg-blue-200"
+                >
+                  <Pencil className="w-4 h-4" />
+                  <span>Edit Transaction</span>
                 </button>
               )}
               <div className="ml-auto flex items-center gap-2">
@@ -529,6 +607,30 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
                 Confirm Void
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {editModalOpen && selectedTxn && (
+        <div className="fixed inset-0 z-[60] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-3xl p-6 space-y-4 border border-slate-200 dark:border-slate-800">
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">Edit Transaction</h3>
+              <button onClick={() => setEditModalOpen(false)} className="p-1 text-slate-400"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="text-[11px] text-amber-700 dark:text-amber-300">Reference number and original audit identity remain unchanged. Changes are recorded in the audit trail.</div>
+            <div className="grid grid-cols-2 gap-3 text-xs">
+              <label className="font-semibold text-slate-600 dark:text-slate-300">Date<input type="date" value={editForm.date} onChange={e => setEditForm(f => ({ ...f, date: e.target.value }))} className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 p-2 dark:border-slate-700 dark:bg-slate-800" /></label>
+              <label className="font-semibold text-slate-600 dark:text-slate-300">Time<input type="time" value={editForm.time} onChange={e => setEditForm(f => ({ ...f, time: e.target.value }))} className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 p-2 dark:border-slate-700 dark:bg-slate-800" /></label>
+            </div>
+            <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">{selectedTxnType === 'receipt' ? 'Received From' : 'Payee'}<input value={editForm.party} onChange={e => setEditForm(f => ({ ...f, party: e.target.value }))} className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 p-2 dark:border-slate-700 dark:bg-slate-800" /></label>
+            <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">Description<textarea value={editForm.description} onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))} rows={2} className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 p-2 dark:border-slate-700 dark:bg-slate-800" /></label>
+            <div className="grid grid-cols-2 gap-3 text-xs">
+              <label className="font-semibold text-slate-600 dark:text-slate-300">Amount<input type="number" min="0.01" step="0.01" value={editForm.amount} onChange={e => setEditForm(f => ({ ...f, amount: e.target.value }))} className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 p-2 dark:border-slate-700 dark:bg-slate-800" /></label>
+              <label className="font-semibold text-slate-600 dark:text-slate-300">Payment Method<select value={editForm.paymentMethod} onChange={e => setEditForm(f => ({ ...f, paymentMethod: e.target.value }))} className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 p-2 dark:border-slate-700 dark:bg-slate-800"><option value="cash">Cash</option><option value="bank">Bank</option><option value="mobile_money">Mobile Money</option><option value="cheque">Cheque</option><option value="other">Other</option></select></label>
+            </div>
+            <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">Account<select value={editForm.accountId} onChange={e => setEditForm(f => ({ ...f, accountId: e.target.value }))} className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 p-2 dark:border-slate-700 dark:bg-slate-800">{accounts.map(account => <option key={account.id} value={account.id}>{account.name}</option>)}</select></label>
+            <div className="flex justify-end gap-2"><button onClick={() => setEditModalOpen(false)} className="rounded-xl bg-slate-100 px-4 py-2 text-xs font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-300">Cancel</button><button onClick={handleEditTransaction} className="rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white">Save Changes</button></div>
           </div>
         </div>
       )}

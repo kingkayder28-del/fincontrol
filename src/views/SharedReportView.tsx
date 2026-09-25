@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
-import { Lock, FileSpreadsheet, ShieldCheck, Download, ArrowLeft } from 'lucide-react';
-import { Organization, ReportShareLink } from '../types';
-import { getStore, formatCurrency } from '../lib/storage';
+import React, { useEffect, useState } from 'react';
+import { Lock, ShieldCheck, ArrowLeft } from 'lucide-react';
+import { Organization } from '../types';
+import { formatCurrency } from '../lib/storage';
 
 interface SharedReportViewProps {
   shareCode: string;
@@ -9,20 +9,60 @@ interface SharedReportViewProps {
   onBack: () => void;
 }
 
+type SharedReportPayload = {
+  organization: Organization;
+  reportTitle: string;
+  reportType: string;
+  receipts: Array<{ id: string; receiptNumber: string; date: string; receivedFrom: string; amount: number }>;
+  payments: Array<{ id: string; paymentNumber: string; date: string; payee: string; amount: number }>;
+  cashCounts: Array<{ id: string; date: string; actualPhysicalCash: number; cashDifference: number }>;
+  auditLogs: Array<{ id: string; timestamp: string; action: string; details: string }>;
+};
+
 export const SharedReportView: React.FC<SharedReportViewProps> = ({
   shareCode,
   organization,
   onBack
 }) => {
-  const store = getStore();
-  const shareLink = store.shareLinks.find(s => s.shareCode === shareCode && s.orgId === organization.id);
-
   const [enteredPasscode, setEnteredPasscode] = useState('');
-  const [isAuthenticated, setIsAuthenticated] = useState(!shareLink?.passcode);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [requiresPasscode, setRequiresPasscode] = useState(false);
+  const [report, setReport] = useState<SharedReportPayload | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const isExpired = Boolean(shareLink?.expiresAt && new Date(shareLink.expiresAt) < new Date());
-  if (!shareLink || shareLink.isRevoked || isExpired) {
+  const backendUrl = (typeof window !== 'undefined' && (window as any).__FINCONTROL_BACKEND_URL__) || 'http://localhost:4000';
+
+  const loadReport = async (passcode?: string) => {
+    setIsLoading(true);
+    const response = await fetch(`${backendUrl}/api/shared/${encodeURIComponent(shareCode)}${passcode ? '/access' : ''}`, {
+      method: passcode ? 'POST' : 'GET',
+      headers: passcode ? { 'Content-Type': 'application/json' } : undefined,
+      body: passcode ? JSON.stringify({ passcode }) : undefined
+    });
+    const result = await response.json().catch(() => ({}));
+    if (response.ok) {
+      setReport(result.report);
+      setIsAuthenticated(true);
+      setRequiresPasscode(false);
+      setErrorMsg('');
+    } else if (result.requiresPasscode) {
+      setRequiresPasscode(true);
+    } else {
+      setErrorMsg(result.message || 'This shared report is unavailable.');
+    }
+    setIsLoading(false);
+  };
+
+  useEffect(() => {
+    void loadReport();
+  }, [shareCode]);
+
+  if (isLoading) {
+    return <div className="max-w-md mx-auto my-16 p-8 text-center text-sm text-slate-500">Loading shared report...</div>;
+  }
+
+  if (!report && !requiresPasscode) {
     return (
       <div className="max-w-md mx-auto my-16 p-8 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-center space-y-4">
         <Lock className="w-12 h-12 text-rose-500 mx-auto" />
@@ -35,17 +75,12 @@ export const SharedReportView: React.FC<SharedReportViewProps> = ({
     );
   }
 
-  const handleAuthenticate = (e: React.FormEvent) => {
+  const handleAuthenticate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (enteredPasscode === shareLink.passcode) {
-      setIsAuthenticated(true);
-      setErrorMsg('');
-    } else {
-      setErrorMsg('Incorrect passcode. Access denied.');
-    }
+    await loadReport(enteredPasscode);
   };
 
-  if (!isAuthenticated) {
+  if (!isAuthenticated || !report) {
     return (
       <div className="max-w-md mx-auto my-16 p-8 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4">
         <div className="text-center space-y-1">
@@ -73,7 +108,12 @@ export const SharedReportView: React.FC<SharedReportViewProps> = ({
     );
   }
 
-  const receipts = store.receipts.filter(r => r.orgId === organization.id);
+  const activeOrganization = report.organization || organization;
+  const reportRows = report.reportType === 'cash_control'
+    ? report.cashCounts.map(count => ({ id: count.id, reference: count.date, party: 'Cash count', amount: count.cashDifference }))
+    : report.reportType === 'supplier_payables'
+      ? report.payments.map(payment => ({ id: payment.id, reference: payment.paymentNumber, party: payment.payee, amount: payment.amount, date: payment.date }))
+      : report.receipts.map(receipt => ({ id: receipt.id, reference: receipt.receiptNumber, party: receipt.receivedFrom, amount: receipt.amount, date: receipt.date }));
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-12 animate-in fade-in">
@@ -91,8 +131,8 @@ export const SharedReportView: React.FC<SharedReportViewProps> = ({
       <div className="bg-white dark:bg-slate-900 p-8 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-xl space-y-6">
         <div className="border-b border-slate-200 dark:border-slate-800 pb-4">
           <span className="text-[10px] font-bold uppercase text-purple-600 font-mono">LEDGERNEST OFFICIAL REPORT</span>
-          <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100 mt-1">{shareLink.reportTitle}</h1>
-          <div className="text-xs text-slate-500 mt-1">Generated by {shareLink.createdBy} • Organization: {organization.name}</div>
+          <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100 mt-1">{report.reportTitle}</h1>
+          <div className="text-xs text-slate-500 mt-1">Organization: {activeOrganization.name}</div>
         </div>
 
         <div className="overflow-x-auto">
@@ -106,12 +146,12 @@ export const SharedReportView: React.FC<SharedReportViewProps> = ({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-              {receipts.map(r => (
-                <tr key={r.id}>
-                  <td className="p-3 font-mono font-bold">{r.receiptNumber}</td>
-                  <td className="p-3">{r.date}</td>
-                  <td className="p-3 font-semibold">{r.receivedFrom}</td>
-                  <td className="p-3 text-right font-bold text-emerald-600">{formatCurrency(r.amount, organization.currency)}</td>
+              {reportRows.map(row => (
+                <tr key={row.id}>
+                  <td className="p-3 font-mono font-bold">{row.reference}</td>
+                  <td className="p-3">{String('date' in row ? row.date : '-')}</td>
+                  <td className="p-3 font-semibold">{row.party}</td>
+                  <td className={`p-3 text-right font-bold ${row.amount < 0 ? 'text-rose-600' : 'text-emerald-600'}`}>{formatCurrency(row.amount, activeOrganization.currency)}</td>
                 </tr>
               ))}
             </tbody>
